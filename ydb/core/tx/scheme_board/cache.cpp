@@ -763,7 +763,7 @@ class TSchemeCache: public TMonitorableActor<TSchemeCache> {
             FileStoreInfo.Drop();
             ViewInfo.Drop();
             ResourcePoolInfo.Drop();
-            AbstractObjectInfo.Drop();
+            TieringRuleInfo.Drop();
         }
 
         void FillTableInfo(const NKikimrSchemeOp::TPathDescription& pathDesc) {
@@ -1269,7 +1269,7 @@ class TSchemeCache: public TMonitorableActor<TSchemeCache> {
             DESCRIPTION_PART(FileStoreInfo);
             DESCRIPTION_PART(ViewInfo);
             DESCRIPTION_PART(ResourcePoolInfo);
-            DESCRIPTION_PART(AbstractObjectInfo);
+            DESCRIPTION_PART(TieringRuleInfo);
 
             #undef DESCRIPTION_PART
 
@@ -1600,9 +1600,9 @@ class TSchemeCache: public TMonitorableActor<TSchemeCache> {
                 Kind = TNavigate::KindResourcePool;
                 FillInfo(Kind, ResourcePoolInfo, std::move(*pathDesc.MutableResourcePoolDescription()));
                 break;
-            case NKikimrSchemeOp::EPathTypeAbstractObject:
-                Kind = TNavigate::KindAbstractObject;
-                FillInfo(Kind, AbstractObjectInfo, std::move(*pathDesc.MutableAbstractObjectDescription()));
+            case NKikimrSchemeOp::EPathTypeTieringRule:
+                Kind = TNavigate::KindTieringRule;
+                FillInfo(Kind, TieringRuleInfo, std::move(*pathDesc.MutableTieringRuleDescription()));
                 break;
             case NKikimrSchemeOp::EPathTypeInvalid:
                 Y_DEBUG_ABORT("Invalid path type");
@@ -1677,8 +1677,8 @@ class TSchemeCache: public TMonitorableActor<TSchemeCache> {
                     case NKikimrSchemeOp::EPathTypeResourcePool:
                         ListNodeEntry->Children.emplace_back(name, pathId, TNavigate::KindResourcePool);
                         break;
-                    case NKikimrSchemeOp::EPathTypeAbstractObject:
-                        ListNodeEntry->Children.emplace_back(name, pathId, TNavigate::KindAbstractObject);
+                    case NKikimrSchemeOp::EPathTypeTieringRule:
+                        ListNodeEntry->Children.emplace_back(name, pathId, TNavigate::KindTieringRule);
                         break;
                     case NKikimrSchemeOp::EPathTypeTableIndex:
                     case NKikimrSchemeOp::EPathTypeInvalid:
@@ -1901,7 +1901,7 @@ class TSchemeCache: public TMonitorableActor<TSchemeCache> {
             entry.FileStoreInfo = FileStoreInfo;
             entry.ViewInfo = ViewInfo;
             entry.ResourcePoolInfo = ResourcePoolInfo;
-            entry.AbstractObjectInfo = AbstractObjectInfo;
+            entry.TieringRuleInfo = TieringRuleInfo;
         }
 
         bool CheckColumns(TResolveContext* context, TResolve::TEntry& entry,
@@ -2200,8 +2200,8 @@ class TSchemeCache: public TMonitorableActor<TSchemeCache> {
         // ResourcePool specific
         TIntrusivePtr<TNavigate::TResourcePoolInfo> ResourcePoolInfo;
 
-        // AbstractObject specific
-        TIntrusivePtr<TNavigate::TAbstractObjectInfo> AbstractObjectInfo;
+        // TieringRule specific
+        TIntrusivePtr<TNavigate::TTieringRuleInfo> TieringRuleInfo;
 
     }; // TCacheItem
 
