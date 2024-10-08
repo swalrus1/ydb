@@ -1855,7 +1855,6 @@ message TModifyScheme {
     optional TRestoreIncrementalBackup RestoreIncrementalBackup = 73;
 
     optional TTieringRuleDescription CreateTieringRule = 74;
-    optional TTieringRuleDescription AlterTieringRule = 75;
 }
 
 message TCopySequence {
