@@ -219,13 +219,13 @@ Y_UNIT_TEST(CreateTable) {
         {"create table user(order by (user asc))","CREATE TABLE user (\n\tORDER BY (user ASC)\n);\n"},
         {"create table user(order by (user desc,user))","CREATE TABLE user (\n\tORDER BY (user DESC, user)\n);\n"},
         {"create table user(user int32) with (ttl=interval('P1D') on user as seconds)",
-            "CREATE TABLE user (\n\tuser int32\n)\nWITH (ttl = interval('P1D') ON user AS SECONDS);\n"},
+            "CREATE TABLE user (\n\tuser int32\n)\nWITH (ttl = INTERVAL ('P1D') ON user AS SECONDS);\n"},
         {"create table user(user int32) with (ttl=interval('P1D') on user as MilliSeconds)",
-            "CREATE TABLE user (\n\tuser int32\n)\nWITH (ttl = interval('P1D') ON user AS MILLISECONDS);\n"},
+            "CREATE TABLE user (\n\tuser int32\n)\nWITH (ttl = INTERVAL ('P1D') ON user AS MILLISECONDS);\n"},
         {"create table user(user int32) with (ttl=interval('P1D') on user as microSeconds)",
-            "CREATE TABLE user (\n\tuser int32\n)\nWITH (ttl = interval('P1D') ON user AS MICROSECONDS);\n"},
+            "CREATE TABLE user (\n\tuser int32\n)\nWITH (ttl = INTERVAL ('P1D') ON user AS MICROSECONDS);\n"},
         {"create table user(user int32) with (ttl=interval('P1D') on user as nAnOsEcOnDs)",
-            "CREATE TABLE user (\n\tuser int32\n)\nWITH (ttl = interval('P1D') ON user AS NANOSECONDS);\n"},
+            "CREATE TABLE user (\n\tuser int32\n)\nWITH (ttl = INTERVAL ('P1D') ON user AS NANOSECONDS);\n"},
         {"create table user(index user global unique sync on (user,user) with (user=user,user=user))",
             "CREATE TABLE user (\n\tINDEX user GLOBAL UNIQUE SYNC ON (user, user) WITH (user = user, user = user)\n);\n"},
         {"create table user(index user global async on (user) with (user=user,))",
@@ -253,7 +253,7 @@ Y_UNIT_TEST(CreateTable) {
             ")\n"
             "INHERITS (s3: $cluster.xxx)\n"
             "PARTITION BY HASH (a, b, hash)\n"
-            "WITH (inherits = interval('PT1D') ON logical_time)\n"
+            "WITH (inherits = INTERVAL ('PT1D') ON logical_time)\n"
             "TABLESTORE tablestore;\n"},
         {"create table user(foo int32, bar bool ?) partition by hash(a,b,hash) with (tiering='some')",
             "CREATE TABLE user (\n"

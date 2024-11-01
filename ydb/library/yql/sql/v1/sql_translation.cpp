@@ -1994,7 +1994,7 @@ namespace {
         const TRule_strict_interval_expr& from, std::vector<TTtlSettings::TTierSettings>& to, TSqlExpression& expr, TContext& ctx) {
         TNodePtr evictionDelayExpr;
         if (!StoreStrictInterval(from, evictionDelayExpr, expr, ctx)) {
-        return false;
+            return false;
         }
         to.emplace_back(evictionDelayExpr);
         return true;
