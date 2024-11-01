@@ -791,9 +791,13 @@ table_setting_value:
     | STRING_VALUE
     | integer
     | split_boundaries
-    | expr ON an_id (AS (SECONDS | MILLISECONDS | MICROSECONDS | NANOSECONDS))?
+    | (strict_interval_expr | ttl_tier_list) ON an_id (AS (SECONDS | MILLISECONDS | MICROSECONDS | NANOSECONDS))?
     | bool_value
 ;
+
+strict_interval_expr: INTERVAL LPAREN expr RPAREN;
+ttl_tier_entry: strict_interval_expr (TO an_id)?;
+ttl_tier_list: LPAREN ttl_tier_entry (COMMA ttl_tier_entry)* RPAREN;
 
 family_entry: FAMILY an_id family_settings;
 family_settings: LPAREN (family_settings_entry (COMMA family_settings_entry)*)? RPAREN;
@@ -1342,6 +1346,7 @@ keyword_as_compat:
   // | INNER
   | INSERT
   | INSTEAD
+  | INTERVAL
   | INTO
   | IS
   // | ISNULL
@@ -1560,6 +1565,7 @@ keyword_compat: (
   | INNER
   | INSERT
   | INSTEAD
+  | INTERVAL
   | INTO
   | IS
   | ISNULL
@@ -1906,6 +1912,7 @@ INITIALLY: I N I T I A L L Y;
 INNER: I N N E R;
 INSERT: I N S E R T;
 INSTEAD: I N S T E A D;
+INTERVAL: I N T E R V A L;
 INTERSECT: I N T E R S E C T;
 INTO: I N T O;
 IS: I S;
