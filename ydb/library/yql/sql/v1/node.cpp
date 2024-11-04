@@ -354,6 +354,14 @@ const TStructNode* INode::GetStructNode() const {
     return nullptr;
 }
 
+TTtlTierNode* INode::GetTtlTierNode() {
+    return nullptr;
+}
+
+const TTtlTierNode* INode::GetTtlTierNode() const {
+    return nullptr;
+}
+
 TAccessNode* INode::GetAccessNode() {
     return nullptr;
 }
@@ -576,6 +584,14 @@ TStructNode* IProxyNode::GetStructNode() {
 
 const TStructNode* IProxyNode::GetStructNode() const {
     return static_cast<const INode*>(Inner.Get())->GetStructNode();
+}
+
+TTtlTierNode* IProxyNode::GetTtlTierNode() {
+    return Inner->GetTtlTierNode();
+}
+
+const TTtlTierNode* IProxyNode::GetTtlTierNode() const {
+    return static_cast<const INode*>(Inner.Get())->GetTtlTierNode();
 }
 
 TAccessNode* IProxyNode::GetAccessNode() {
@@ -1899,9 +1915,9 @@ TTtlSettings::TTierSettings::TTierSettings(const TNodePtr& evictionDelay, const 
     , StorageName(storageName) {
 }
 
-TTtlSettings::TTtlSettings(const TIdentifier& columnName, const std::vector<TTierSettings>& tiers, const TMaybe<EUnit>& columnUnit)
+TTtlSettings::TTtlSettings(const TIdentifier& columnName, const TNodePtr& expr, const TMaybe<EUnit>& columnUnit)
     : ColumnName(columnName)
-    , Tiers(tiers)
+    , Expr(expr)
     , ColumnUnit(columnUnit)
 {
 }
@@ -2369,6 +2385,46 @@ TNodePtr BuildStructure(TPosition pos, const TVector<TNodePtr>& exprsUnlabeled, 
 TNodePtr BuildOrderedStructure(TPosition pos, const TVector<TNodePtr>& exprsUnlabeled, const TVector<TNodePtr>& labels) {
     bool ordered = true;
     return new TStructNode(pos, exprsUnlabeled, labels, ordered);
+}
+
+TTtlTierNode::TTtlTierNode(TPosition pos, const TNodePtr& intervalExpr, const TMaybe<TIdentifier>& storageName)
+    : TAstListNode(pos)
+    , IntervalExpr(intervalExpr)
+    , StorageName(storageName)
+{
+}
+
+bool TTtlTierNode::DoInit(TContext& ctx, ISource* src) {
+    if (IntervalExpr->GetLabel()) {
+        ctx.Error(IntervalExpr->GetPos()) << "eviction delay in TTL tier cannot be named";
+        return false;
+    }
+    Add("quote", IntervalExpr);
+    return TAstListNode::DoInit(ctx, src);
+}
+
+TNodePtr TTtlTierNode::DoClone() const {
+    return new TTtlTierNode(Pos, IntervalExpr->Clone(), StorageName);
+}
+
+TTtlTierNode* TTtlTierNode::GetTtlTierNode() {
+    return this;
+}
+
+const TTtlTierNode* TTtlTierNode::GetTtlTierNode() const {
+    return this;
+}
+
+void TTtlTierNode::CollectPreaggregateExprs(TContext& ctx, ISource& src, TVector<INode::TPtr>& exprs) {
+    IntervalExpr->CollectPreaggregateExprs(ctx, src, exprs);
+}
+
+const TString* TTtlTierNode::GetSourceName() const {
+    return IntervalExpr->GetSourceName();
+}
+
+TNodePtr BuildTtlTier(TPosition pos, const TNodePtr& intervalNode, const TMaybe<TIdentifier>& storageName) {
+    return new TTtlTierNode(pos, intervalNode, storageName);
 }
 
 TListOfNamedNodes::TListOfNamedNodes(TPosition pos, TVector<TNodePtr>&& exprs)

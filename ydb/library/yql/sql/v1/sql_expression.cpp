@@ -1345,6 +1345,7 @@ TMaybe<TExprOrIdent> TSqlExpression::AtomExpr(const TRule_atom_expr& node, const
     //   | list_literal
     //   | dict_literal
     //   | struct_literal
+    //   | ttl_tier_literal
     // ;
     if (node.Alt_case() != TRule_atom_expr::kAltAtomExpr2 && tail.Count) {
         UnexpectedQuestionToken(tail);
@@ -1411,6 +1412,9 @@ TMaybe<TExprOrIdent> TSqlExpression::AtomExpr(const TRule_atom_expr& node, const
             break;
         case TRule_atom_expr::kAltAtomExpr12:
             result.Expr = StructLiteral(node.GetAlt_atom_expr12().GetRule_struct_literal1());
+            break;
+        case TRule_atom_expr::kAltAtomExpr13:
+            result.Expr = TtlTierLiteral(node.GetAlt_atom_expr13().GetRule_ttl_tier_literal1());
             break;
         case TRule_atom_expr::ALT_NOT_SET:
             AltNotImplemented("atom_expr", node);
