@@ -221,9 +221,17 @@ struct TTtlSettings {
         Nanoseconds = 4,
     };
 
+    struct TTier {
+        TDuration EvictionDelay;
+        TString StorageName;
+
+        void SerializeToProto(Ydb::Table::EvictionTier& proto) const;
+    };
+
     TString ColumnName;
-    TDuration ExpireAfter;
+    std::optional<TDuration> ExpireAfter;
     TMaybe<EUnit> ColumnUnit;
+    std::vector<TTier> Tiers;
 
     static bool TryParse(const NNodes::TCoNameValueTupleList& node, TTtlSettings& settings, TString& error);
 };
