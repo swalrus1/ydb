@@ -1963,18 +1963,68 @@ namespace {
         return true;
     }
 
+    bool StoreStrictInterval(const TRule_strict_interval_expr& from, TNodePtr& to, TSqlExpression& expr, TContext& ctx) {
+        auto intervalArgExpr = expr.Build(from.GetRule_expr3());
+        if (!intervalArgExpr) {
+            return false;
+        }
+        auto intervalExpr = BuildBuiltinFunc(ctx, ctx.Pos(), "Interval", { intervalArgExpr });
+        if (!intervalExpr) {
+            return false;
+        }
+        to = intervalExpr;
+        return true;
+    }
+
+    bool StoreTierSettings(
+        const TRule_ttl_tier_entry& from, std::vector<TTtlSettings::TTierSettings>& to, TSqlExpression& expr, TContext& ctx, TTranslation& txc) {
+        TNodePtr evictionDelayExpr;
+        if (!StoreStrictInterval(from.GetRule_strict_interval_expr1(), evictionDelayExpr, expr, ctx)) {
+            return false;
+        }
+        std::optional<TIdentifier> storageName;
+        if (from.HasBlock2()) {
+            storageName = IdEx(from.GetBlock2().GetRule_an_id2(), txc);
+        }
+        to.emplace_back(evictionDelayExpr, storageName);
+        return true;
+    }
+
+    bool StoreTierSettings(
+        const TRule_strict_interval_expr& from, std::vector<TTtlSettings::TTierSettings>& to, TSqlExpression& expr, TContext& ctx) {
+        TNodePtr evictionDelayExpr;
+        if (!StoreStrictInterval(from, evictionDelayExpr, expr, ctx)) {
+            return false;
+        }
+        to.emplace_back(evictionDelayExpr);
+        return true;
+    }
+
     bool StoreTtlSettings(const TRule_table_setting_value& from, TResetableSetting<TTtlSettings, void>& to, TSqlExpression& expr, TContext& ctx,
         TTranslation& txc) {
         switch (from.Alt_case()) {
         case TRule_table_setting_value::kAltTableSettingValue5: {
             auto columnName = IdEx(from.GetAlt_table_setting_value5().GetRule_an_id3(), txc);
-            auto exprNode = expr.Build(from.GetAlt_table_setting_value5().GetRule_expr1());
-            if (!exprNode) {
-                return false;
-            }
+            auto tiersBlock = from.GetAlt_table_setting_value5().GetBlock1();
 
-            if (exprNode->GetOpName() != "Interval" && !exprNode->GetTtlTierNode()) {
-                ctx.Error() << "Literal of type Interval or Tuple<TtlTier, ...> is expected for TTL";
+            std::vector<TTtlSettings::TTierSettings> tiers;
+            switch (tiersBlock.Alt_case()) {
+            case TRule_table_setting_value_TAlt5_TBlock1::kAlt1:
+                if (!StoreTierSettings(tiersBlock.GetAlt1().GetRule_strict_interval_expr1(), tiers, expr, ctx)) {
+                    return false;
+                }
+                break;
+            case TRule_table_setting_value_TAlt5_TBlock1::kAlt2:
+                if (!StoreTierSettings(tiersBlock.GetAlt2().GetRule_ttl_tier_list1().GetRule_ttl_tier_entry2(), tiers, expr, ctx, txc)) {
+                    return false;
+                }
+                for (const auto& tierBlock : tiersBlock.GetAlt2().GetRule_ttl_tier_list1().GetBlock3()) {
+                    if (!StoreTierSettings(tierBlock.GetRule_ttl_tier_entry2(), tiers, expr, ctx, txc)) {
+                        return false;
+                    }
+                }
+                break;
+            case TRule_table_setting_value_TAlt5_TBlock1::ALT_NOT_SET:
                 return false;
             }
 
@@ -1988,7 +2038,7 @@ namespace {
                 }
             }
 
-            to.Set(TTtlSettings(columnName, exprNode, columnUnit));
+            to.Set(TTtlSettings(columnName, tiers, columnUnit));
             break;
         }
         default:
@@ -3330,27 +3380,6 @@ TNodePtr TSqlTranslation::StructLiteral(const TRule_struct_literal& node) {
         }
     }
     return BuildStructure(pos, values, labels);
-}
-
-TNodePtr TSqlTranslation::TtlTierLiteral(const TRule_ttl_tier_literal& node) {
-    TSqlExpression sqlExpr(Ctx, Mode);
-    TNodePtr intervalExpr = sqlExpr.Build(node.GetRule_expr3());
-    if (!intervalExpr) {
-        return nullptr;
-    }
-
-    TMaybe<TIdentifier> storageName;
-    switch (node.GetRule_ttl_tier_action4().GetBlock1().Alt_case()) {
-        case NSQLv1Generated::TRule_ttl_tier_action_TBlock1::kAlt1:
-            storageName = IdEx(node.GetRule_ttl_tier_action4().GetBlock1().GetAlt1().GetRule_an_id2(), *this);
-            break;
-        case NSQLv1Generated::TRule_ttl_tier_action_TBlock1::kAlt2:
-            break;
-        case NSQLv1Generated::TRule_ttl_tier_action_TBlock1::ALT_NOT_SET:
-            Y_ABORT("You should change implementation according to grammar changes");
-    }
-
-    return BuildTtlTier(Ctx.Pos(), intervalExpr, storageName);
 }
 
 bool TSqlTranslation::TableHintImpl(const TRule_table_hint& rule, TTableHints& hints, const TString& provider, const TString& keyFunc) {

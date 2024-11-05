@@ -1344,6 +1344,7 @@ keyword_as_compat:
   // | INNER
   | INSERT
   | INSTEAD
+  | INTERVAL
   | INTO
   | IS
   // | ISNULL
@@ -1562,6 +1563,7 @@ keyword_compat: (
   | INNER
   | INSERT
   | INSTEAD
+  | INTERVAL
   | INTO
   | IS
   | ISNULL
@@ -1908,6 +1910,7 @@ INITIALLY: I N I T I A L L Y;
 INNER: I N N E R;
 INSERT: I N S E R T;
 INSTEAD: I N S T E A D;
+INTERVAL: I N T E R V A L;
 INTERSECT: I N T E R S E C T;
 INTO: I N T O;
 IS: I S;

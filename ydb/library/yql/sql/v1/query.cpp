@@ -243,20 +243,12 @@ static INode::TPtr CreateTableSettings(const TTableSettings& tableSettings, ETab
             opts = L(opts, Q(Y(Q("columnName"), BuildQuotedAtom(ttlSettings.ColumnName.Pos, ttlSettings.ColumnName.Name))));
 
             auto tiersDesc = Y();
-            if (auto* tiersTuple = ttlSettings.Expr->GetTupleNode()) {
-                for (size_t tierIdx = 0; tierIdx != tiersTuple->GetTupleSize(); ++tierIdx) {
-                    auto* tier = tiersTuple->GetTupleElement(tierIdx)->GetTtlTierNode();
-                    YQL_ENSURE(tier, "Expected nodes of type TtlTier in TTL value");
-                    auto tierDesc = Y();
-                    tierDesc = L(tierDesc, Q(Y(Q("evictionDelay"), tier->GetIntervalNode())));
-                    if (const auto& storageName = tier->GetStorageName()) {
-                        tierDesc = L(tierDesc, Q(Y(Q("storageName"), BuildQuotedAtom(storageName->Pos, storageName->Name))));
-                    }
-                    tiersDesc = L(tiersDesc, Q(tierDesc));
-                }
-            } else {
+            for (const auto& tier : ttlSettings.Tiers) {
                 auto tierDesc = Y();
-                tierDesc = L(tierDesc, Q(Y(Q("evictionDelay"), ttlSettings.Expr)));
+                tierDesc = L(tierDesc, Q(Y(Q("evictionDelay"), tier.EvictionDelay)));
+                if (tier.StorageName) {
+                    tierDesc = L(tierDesc, Q(Y(Q("storageName"), BuildQuotedAtom(tier.StorageName->Pos, tier.StorageName->Name))));
+                }
                 tiersDesc = L(tiersDesc, Q(tierDesc));
             }
             opts = L(opts, Q(Y(Q("tiers"), Q(tiersDesc))));

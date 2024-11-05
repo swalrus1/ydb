@@ -90,7 +90,6 @@ namespace NSQLTranslationV1 {
     class TTupleNode;
     class TCallNode;
     class TStructNode;
-    class TTtlTierNode;
     class TAccessNode;
     class TLambdaNode;
     class TUdfNode;
@@ -204,9 +203,6 @@ namespace NSQLTranslationV1 {
 
         virtual TStructNode* GetStructNode();
         virtual const TStructNode* GetStructNode() const;
-
-        virtual TTtlTierNode* GetTtlTierNode();
-        virtual const TTtlTierNode* GetTtlTierNode() const;
 
         virtual TAccessNode* GetAccessNode();
         virtual const TAccessNode* GetAccessNode() const;
@@ -335,9 +331,6 @@ namespace NSQLTranslationV1 {
 
         virtual TStructNode* GetStructNode() override;
         virtual const TStructNode* GetStructNode() const override;
-
-        virtual TTtlTierNode* GetTtlTierNode() override;
-        virtual const TTtlTierNode* GetTtlTierNode() const override;
 
         virtual TAccessNode* GetAccessNode() override;
         virtual const TAccessNode* GetAccessNode() const override;
@@ -936,29 +929,6 @@ namespace NSQLTranslationV1 {
         const bool Ordered;
     };
 
-    class TTtlTierNode: public TAstListNode {
-    public:
-        TTtlTierNode(TPosition pos, const TNodePtr& intervalExpr, const TMaybe<TIdentifier>& storageName);
-
-        bool DoInit(TContext& ctx, ISource* src) override;
-        TNodePtr DoClone() const final;
-        TNodePtr GetIntervalNode() const {
-            return IntervalExpr;
-        }
-        const TMaybe<TIdentifier>& GetStorageName() const {
-            return StorageName;
-        }
-        TTtlTierNode* GetTtlTierNode() override;
-        const TTtlTierNode* GetTtlTierNode() const override;
-
-    private:
-        void CollectPreaggregateExprs(TContext& ctx, ISource& src, TVector<INode::TPtr>& exprs) override;
-        const TString* GetSourceName() const override;
-
-        const TNodePtr IntervalExpr;
-        const TMaybe<TIdentifier> StorageName;
-    };
-
 
     class TUdfNode: public INode {
     public:
@@ -1150,10 +1120,10 @@ namespace NSQLTranslationV1 {
         };
 
         TIdentifier ColumnName;
-        TNodePtr Expr;
+        std::vector<TTierSettings> Tiers;
         TMaybe<EUnit> ColumnUnit;
 
-        TTtlSettings(const TIdentifier& columnName, const TNodePtr& expr, const TMaybe<EUnit>& columnUnit = {});
+        TTtlSettings(const TIdentifier& columnName, const std::vector<TTierSettings>& tiers, const TMaybe<EUnit>& columnUnit = {});
     };
 
     struct TTableSettings {
@@ -1466,8 +1436,6 @@ namespace NSQLTranslationV1 {
     TNodePtr BuildStructure(TPosition pos, const TVector<TNodePtr>& exprs);
     TNodePtr BuildStructure(TPosition pos, const TVector<TNodePtr>& exprsUnlabeled, const TVector<TNodePtr>& labels);
     TNodePtr BuildOrderedStructure(TPosition pos, const TVector<TNodePtr>& exprsUnlabeled, const TVector<TNodePtr>& labels);
-
-    TNodePtr BuildTtlTier(TPosition pos, const TNodePtr& intervalExpr, const TMaybe<TIdentifier>& storageName);
 
     TNodePtr BuildListOfNamedNodes(TPosition pos, TVector<TNodePtr>&& exprs);
 
