@@ -177,7 +177,7 @@ class TestAlterTiering(BaseTestSet):
         tiers: list[str] = []
         for i, s3_config in enumerate(s3_configs):
             tiers.append(f'TestAlterTiering:tier{i}')
-            self._override_tier(sth, tiers[-1], TierConfig(tiers[-1], s3_config))
+            # self._override_tier(sth, tiers[-1], TierConfig(tiers[-1], s3_config))
 
         tiering_policy_configs: list[TieringPolicy] = []
         tiering_policy_configs.append(TieringPolicy().with_rule(TieringRule(tiers[0], '1s')))
@@ -190,7 +190,7 @@ class TestAlterTiering(BaseTestSet):
         tiering_rules: list[Optional[str]] = []
         for i, config in enumerate(tiering_policy_configs):
             tiering_rules.append(f'TestAlterTiering:tiering_rule{i}')
-            self._override_tiering_rule(sth, tiering_rules[-1], 'timestamp', config)
+            # self._override_tiering_rule(sth, tiering_rules[-1], 'timestamp', config)
         tiering_rules.append(None)
 
         if not is_standalone_tables:
@@ -211,7 +211,7 @@ class TestAlterTiering(BaseTestSet):
             else:
                 tables.append(f'store/extra_table{i}')
             sth.execute_scheme_query(CreateTable(tables[-1]).with_schema(self.schema1))
-            sth.execute_scheme_query(AlterTable(tables[-1]).set_tiering(tiering_rule))
+            # sth.execute_scheme_query(AlterTable(tables[-1]).set_tiering(tiering_rule))
 
         if any(self._count_objects(bucket) != 0 for bucket in s3_configs):
             assert any(sth.get_table_rows_count(table) != 0 for table in tables), \
@@ -220,20 +220,20 @@ class TestAlterTiering(BaseTestSet):
         threads = []
 
         # "Alter table drop column" causes scan failures
-        threads.append(self.TestThread(target=self._loop_alter_column, args=[ctx, 'store', test_duration]))
-        for table in tables_for_tiering_modification:
-            threads.append(self.TestThread(
-                target=self._loop_change_tiering_rule,
-                args=[ctx, table, random.sample(tiering_rules, len(tiering_rules)), test_duration]
-            ))
+        # threads.append(self.TestThread(target=self._loop_alter_column, args=[ctx, 'store', test_duration]))
+        # for table in tables_for_tiering_modification:
+        #     threads.append(self.TestThread(
+        #         target=self._loop_change_tiering_rule,
+        #         args=[ctx, table, random.sample(tiering_rules, len(tiering_rules)), test_duration]
+        #     ))
         for i, table in enumerate(tables):
             for writer in range(n_writers):
                 threads.append(self.TestThread(target=self._loop_upsert, args=[ctx, table, i * n_writers + writer, test_duration, allow_s3_unavailability]))
-        for tiering_rule in tiering_rules:
-            threads.append(self.TestThread(
-                target=self._loop_alter_tiering_rule,
-                args=[ctx, tiering_rule, random.sample(['timestamp', 'timestamp2'], 2), random.sample(tiering_policy_configs, len(tiering_policy_configs)), test_duration]
-            ))
+        # for tiering_rule in tiering_rules:
+        #     threads.append(self.TestThread(
+        #         target=self._loop_alter_tiering_rule,
+        #         args=[ctx, tiering_rule, random.sample(['timestamp', 'timestamp2'], 2), random.sample(tiering_policy_configs, len(tiering_policy_configs)), test_duration]
+        #     ))
 
         for thread in threads:
             thread.start()

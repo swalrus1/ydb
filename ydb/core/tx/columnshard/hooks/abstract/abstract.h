@@ -92,7 +92,9 @@ protected:
         return defaultValue;
     }
     virtual TDuration DoGetCompactionActualizationLag(const TDuration defaultValue) const {
-        return defaultValue;
+        // TODO: revert
+        Y_UNUSED(defaultValue);
+        return TDuration::Zero();
     }
     virtual TDuration DoGetActualizationTasksLag(const TDuration defaultValue) const {
         return defaultValue;
@@ -107,7 +109,9 @@ protected:
         return defaultValue;
     }
     virtual ui64 DoGetSmallPortionSizeDetector(const ui64 defaultValue) const {
-        return defaultValue;
+        // TODO: revert
+        Y_UNUSED(defaultValue);
+        return 0;
     }
     virtual TDuration DoGetReadTimeoutClean(const TDuration defaultValue) const {
         return defaultValue;
@@ -125,10 +129,14 @@ protected:
         return defaultValue;
     }
     virtual TDuration DoGetOptimizerFreshnessCheckDuration(const TDuration defaultValue) const {
-        return defaultValue;
+        // TODO: revert
+        Y_UNUSED(defaultValue);
+        return TDuration::Zero();
     }
     virtual TDuration DoGetLagForCompactionBeforeTierings(const TDuration defaultValue) const {
-        return defaultValue;
+        // TODO: revert
+        Y_UNUSED(defaultValue);
+        return TDuration::Zero();
     }
 
 private:
