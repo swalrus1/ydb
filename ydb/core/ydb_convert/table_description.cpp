@@ -48,8 +48,6 @@ THashSet<EAlterOperationKind> GetAlterOperationKinds(const Ydb::Table::AlterTabl
         req->alter_columns_size() ||
         req->ttl_action_case() !=
             Ydb::Table::AlterTableRequest::TTL_ACTION_NOT_SET ||
-        req->tiering_action_case() !=
-            Ydb::Table::AlterTableRequest::TIERING_ACTION_NOT_SET ||
         req->has_alter_storage_settings() || req->add_column_families_size() ||
         req->alter_column_families_size() || req->set_compaction_policy() ||
         req->has_alter_partitioning_settings() ||
@@ -572,10 +570,6 @@ void FillColumnDescriptionImpl(TYdbProto& out,
         if (in.GetTTLSettings().HasEnabled()) {
             AddTtl(out, in.GetTTLSettings().GetEnabled());
         }
-
-        if (in.GetTTLSettings().HasUseTiering()) {
-            out.set_tiering(in.GetTTLSettings().GetUseTiering());
-        }
     }
 }
 
@@ -611,10 +605,6 @@ void FillColumnDescription(Ydb::Table::DescribeTableResult& out, const NKikimrSc
     if (in.HasTtlSettings()) {
         if (in.GetTtlSettings().HasEnabled()) {
             AddTtl(out, in.GetTtlSettings().GetEnabled());
-        }
-
-        if (in.GetTtlSettings().HasUseTiering()) {
-            out.set_tiering(in.GetTtlSettings().GetUseTiering());
         }
     }
 
@@ -828,12 +818,6 @@ bool BuildAlterColumnTableModifyScheme(const TString& path, const Ydb::Table::Al
             }
         } else if (req->has_drop_ttl_settings()) {
             alterColumnTable->MutableAlterTtlSettings()->MutableDisabled();
-        }
-
-        if (req->has_set_tiering()) {
-            alterColumnTable->MutableAlterTtlSettings()->SetUseTiering(req->set_tiering());
-        } else if (req->has_drop_tiering()) {
-            alterColumnTable->MutableAlterTtlSettings()->SetUseTiering("");
         }
     }
 

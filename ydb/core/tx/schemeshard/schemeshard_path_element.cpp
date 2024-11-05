@@ -239,6 +239,10 @@ bool TPathElement::IsBackupCollection() const {
     return PathType == EPathType::EPathTypeBackupCollection;
 }
 
+bool TPathElement::IsTieredStorage() const {
+    return PathType == EPathType::EPathTypeTieredStorage;
+}
+
 void TPathElement::SetDropped(TStepId step, TTxId txId) {
     PathState = EPathState::EPathStateNotExist;
     StepDropped = step;

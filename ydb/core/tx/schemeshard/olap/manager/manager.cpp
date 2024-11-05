@@ -3,9 +3,8 @@
 namespace NKikimr::NSchemeShard {
 
 void TTablesStorage::OnAddObject(const TPathId& pathId, TColumnTableInfo::TPtr object) {
-    const TString& tieringId = object->Description.GetTtlSettings().GetUseTiering();
-    if (!!tieringId) {
-        PathsByTieringId[tieringId].emplace(pathId);
+    for (const auto& tier : object->Description.GetTtlSettings().GetEnabled().GetTiers()) {
+        AFL_VERIFY(PathsByTier[tier.GetStorageName()].emplace(pathId).second);
     }
     for (auto&& s : object->GetColumnShards()) {
         TablesByShard[s].AddId(pathId);
@@ -13,15 +12,14 @@ void TTablesStorage::OnAddObject(const TPathId& pathId, TColumnTableInfo::TPtr o
 }
 
 void TTablesStorage::OnRemoveObject(const TPathId& pathId, TColumnTableInfo::TPtr object) {
-    const TString& tieringId = object->Description.GetTtlSettings().GetUseTiering();
-    if (!!tieringId) {
-        auto it = PathsByTieringId.find(tieringId);
-        if (PathsByTieringId.end() == it) {
-            return;
-        }
-        it->second.erase(pathId);
-        if (it->second.empty()) {
-            PathsByTieringId.erase(it);
+    for (const auto& tier : object->Description.GetTtlSettings().GetEnabled().GetTiers()) {
+        auto findTier = PathsByTier.FindPtr(tier.GetStorageName());
+        AFL_VERIFY(findTier);
+        // AFL_VERIFY(findTier->erase(pathId));
+        findTier->erase(pathId);  // TODO Fix: when table is altered, PathsByTier are not updated
+        AFL_VERIFY(PathsByTier[tier.GetStorageName()].emplace(pathId).second);
+        if (findTier->empty()) {
+            AFL_VERIFY(PathsByTier.erase(tier.GetStorageName()));
         }
     }
     for (auto&& s : object->GetColumnShards()) {
@@ -29,9 +27,9 @@ void TTablesStorage::OnRemoveObject(const TPathId& pathId, TColumnTableInfo::TPt
     }
 }
 
-const THashSet<TPathId>& TTablesStorage::GetTablesWithTiering(const TString& tieringId) const {
-    auto it = PathsByTieringId.find(tieringId);
-    if (it != PathsByTieringId.end()) {
+const THashSet<TPathId>& TTablesStorage::GetTablesWithTier(const TString& storageId) const {
+    auto it = PathsByTier.find(storageId);
+    if (it != PathsByTier.end()) {
         return it->second;
     } else {
         return Default<THashSet<TPathId>>();

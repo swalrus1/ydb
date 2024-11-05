@@ -282,8 +282,8 @@ bool TTablesManager::RegisterSchemaPreset(const TSchemaPreset& schemaPreset, NIc
     return true;
 }
 
-void TTablesManager::AddSchemaVersion(const ui32 presetId, const NOlap::TSnapshot& version, const NKikimrSchemeOp::TColumnTableSchema& schema,
-    NIceDb::TNiceDb& db, std::shared_ptr<TTiersManager>& manager) {
+void TTablesManager::AddSchemaVersion(
+    const ui32 presetId, const NOlap::TSnapshot& version, const NKikimrSchemeOp::TColumnTableSchema& schema, NIceDb::TNiceDb& db) {
     Y_ABORT_UNLESS(SchemaPresetsIds.contains(presetId));
 
     TSchemaPreset::TSchemaPresetVersionInfo versionInfo;
@@ -307,10 +307,7 @@ void TTablesManager::AddSchemaVersion(const ui32 presetId, const NOlap::TSnapsho
         for (auto&& i : Tables) {
             PrimaryIndex->RegisterTable(i.first);
         }
-        // TODO: Don't need IsReady condition? -> remove
-        if (manager->IsReady()) {
-            PrimaryIndex->OnTieringModified(Ttl);
-        }
+        PrimaryIndex->OnTieringModified(Ttl);
     } else {
         PrimaryIndex->RegisterSchemaVersion(version, NOlap::IColumnEngine::TSchemaInitializationData(versionInfo));
     }
@@ -322,8 +319,7 @@ std::unique_ptr<NTabletFlatExecutor::ITransaction> TTablesManager::CreateAddShar
 }
 
 void TTablesManager::AddTableVersion(const ui64 pathId, const NOlap::TSnapshot& version,
-    const NKikimrTxColumnShard::TTableVersionInfo& versionInfo, const std::optional<NKikimrSchemeOp::TColumnTableSchema>& schema, NIceDb::TNiceDb& db,
-    std::shared_ptr<TTiersManager>& manager) {
+    const NKikimrTxColumnShard::TTableVersionInfo& versionInfo, const std::optional<NKikimrSchemeOp::TColumnTableSchema>& schema, NIceDb::TNiceDb& db) {
     auto it = Tables.find(pathId);
     AFL_VERIFY(it != Tables.end());
     auto& table = it->second;
@@ -338,7 +334,7 @@ void TTablesManager::AddTableVersion(const ui64 pathId, const NOlap::TSnapshot& 
         } else {
             Y_ABORT_UNLESS(SchemaPresetsIds.contains(fakePreset.GetId()));
         }
-        AddSchemaVersion(fakePreset.GetId(), version, *schema, db, manager);
+        AddSchemaVersion(fakePreset.GetId(), version, *schema, db);
     }
 
     if (versionInfo.HasTtlSettings()) {
@@ -350,7 +346,7 @@ void TTablesManager::AddTableVersion(const ui64 pathId, const NOlap::TSnapshot& 
         } else {
             Ttl.erase(pathId);
         }
-        if (PrimaryIndex && manager->IsReady()) {
+        if (PrimaryIndex) {
             if (auto findTtl = Ttl.FindPtr(pathId)) {
                 PrimaryIndex->OnTieringModified(*findTtl, pathId);
             } else {

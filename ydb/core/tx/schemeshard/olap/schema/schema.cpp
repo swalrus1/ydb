@@ -1,4 +1,5 @@
 #include "schema.h"
+#include <ydb/core/tx/schemeshard/schemeshard_impl.h>
 #include <ydb/core/tx/schemeshard/common/validation.h>
 #include <ydb/core/tx/schemeshard/olap/ttl/validator.h>
 
@@ -11,7 +12,7 @@ bool TOlapSchema::ValidateTtlSettings(const NKikimrSchemeOp::TColumnDataLifeCycl
         {
             const auto* column = Columns.GetByName(ttl.GetEnabled().GetColumnName());
             if (!column) {
-                errors.AddError("Incorrect ttl column - not found in scheme");
+                errors.AddError("TTL column was not found in table schema: " + ttl.GetEnabled().GetColumnName());
                 return false;
             }
             return TTTLValidator::ValidateColumnTableTtl(ttl.GetEnabled(), Indexes, {}, Columns.GetColumns(), Columns.GetColumnsByName(), errors);
@@ -20,7 +21,6 @@ bool TOlapSchema::ValidateTtlSettings(const NKikimrSchemeOp::TColumnDataLifeCycl
         default:
             break;
     }
-
     return true;
 }
 

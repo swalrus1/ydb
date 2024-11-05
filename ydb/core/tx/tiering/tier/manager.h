@@ -1,19 +1,36 @@
 #pragma once
 #include "object.h"
 
-#include <ydb/services/metadata/manager/generic_manager.h>
+#include <ydb/services/metadata/manager/scheme_manager.h>
 
 namespace NKikimr::NColumnShard::NTiers {
 
-class TTiersManager: public NMetadata::NModifications::TGenericOperationsManager<TTierConfig> {
+class TTiersManager: public NMetadata::NModifications::TSchemeObjectOperationsManager {
+private:
+    inline static const TString KeySecretKey = "secretKey";
+    inline static const TString KeyAccessKey = "accessKey";
+    inline static const TString KeyEndpoint = "endpoint";
+    inline static const TString KeyBucket = "bucket";
+    inline static const TString KeyCompressionCodec = "compression";
+    inline static const TString KeyCompressionLevel = "compressionLevel";
+
+    inline static const THashMap<TString, NKikimrSchemeOp::EColumnCodec> CodecByName = {
+        { "LZ4", NKikimrSchemeOp::EColumnCodec::ColumnCodecLZ4 }, { "ZSTD", NKikimrSchemeOp::EColumnCodec::ColumnCodecZSTD }
+    };
+
+    static std::optional<NKikimrSchemeOp::EColumnCodec> ParseCodec(const TString& in) {
+        if (auto findCodec = CodecByName.FindPtr(in)) {
+            return *findCodec;
+        }
+        return std::nullopt;
+    }
+
 protected:
-    virtual void DoPrepareObjectsBeforeModification(std::vector<TTierConfig>&& patchedObjects,
-        NMetadata::NModifications::IAlterPreparationController<TTierConfig>::TPtr controller,
-        const TInternalModificationContext& context, const NMetadata::NModifications::TAlterOperationContext& alterContext) const override;
+    void DoBuildRequestFromSettings(const NYql::TObjectSettingsImpl& settings, TInternalModificationContext& context,
+        IBuildRequestController::TPtr controller) const override;
 
-    virtual NMetadata::NModifications::TOperationParsingResult DoBuildPatchFromSettings(const NYql::TObjectSettingsImpl& settings,
-        TInternalModificationContext& context) const override;
-public:
+    TString GetLocalStorageDirectory() const override {
+        return TTierConfig::GetLocalStorageDirectory();
+    }
 };
-
 }

@@ -23,7 +23,7 @@ private:
 protected:
     ui32 ShardsCount = 0;
 public:
-    bool Deserialize(const NKikimrSchemeOp::TColumnTableDescription& description, IErrorCollector& errors) {
+    bool Deserialize(const NKikimrSchemeOp::TColumnTableDescription& description, const TOperationContext& /*context*/, IErrorCollector& errors) {
         Name = description.GetName();
         ShardsCount = std::max<ui32>(description.GetColumnShardCount(), 1);
 
@@ -49,7 +49,7 @@ public:
         }
         FillDefaultSharding(*tableInfo->Description.MutableSharding());
 
-        if (!Deserialize(description, errors)) {
+        if (!Deserialize(description, context, errors)) {
             return nullptr;
         }
         if (tableInfo->Description.GetSharding().HasHashSharding()) {

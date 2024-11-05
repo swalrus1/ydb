@@ -97,9 +97,6 @@ void TColumnShard::OnActivateExecutor(const TActorContext& ctx) {
         ctx.Send(selfActorId, new TEvPrivate::TEvTieringModified);
     });
     Tiers->Start(Tiers);
-    if (!NMetadata::NProvider::TServiceOperator::IsEnabled()) {
-        Tiers->TakeConfigs(NYDBTest::TControllers::GetColumnShardController()->GetFallbackTiersSnapshot(), nullptr);
-    }
     BackgroundSessionsManager = std::make_shared<NOlap::NBackground::TSessionsManager>(
         std::make_shared<NBackground::TAdapter>(selfActorId, (NOlap::TTabletId)TabletID(), *this));
 
@@ -114,6 +111,12 @@ void TColumnShard::OnActivateExecutor(const TActorContext& ctx) {
 }
 
 void TColumnShard::Handle(TEvPrivate::TEvTieringModified::TPtr& /*ev*/, const TActorContext& /*ctx*/) {
+    if (auto overrideTiers = NYDBTest::TControllers::GetColumnShardController()->OverrideTierConfigs()) {
+        for (const auto& [name, config] : overrideTiers) {
+            Tiers->UpdateTierConfig(config, name, false);
+        }
+    }
+
     OnTieringModified();
     NYDBTest::TControllers::GetColumnShardController()->OnTieringModified(Tiers);
 }

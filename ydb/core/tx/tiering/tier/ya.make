@@ -2,14 +2,13 @@ LIBRARY()
 
 SRCS(
     manager.cpp
-    object.cpp
-    initializer.cpp
+    GLOBAL object.cpp
     checker.cpp
     GLOBAL behaviour.cpp
+    GLOBAL update.cpp
 )
 
 PEERDIR(
-    ydb/services/metadata/initializer
     ydb/services/metadata/abstract
     ydb/services/metadata/secret
     ydb/core/tx/schemeshard

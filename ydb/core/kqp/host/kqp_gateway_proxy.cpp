@@ -272,16 +272,6 @@ bool ConvertCreateTableSettingsToProto(NYql::TKikimrTableMetadataPtr metadata, Y
         }
     }
 
-    if (const auto& tiering = metadata->TableSettings.Tiering) {
-        if (tiering.IsSet()) {
-            proto.set_tiering(tiering.GetValueSet());
-        } else {
-            code = Ydb::StatusIds::BAD_REQUEST;
-            error = "Can't reset TIERING";
-            return false;
-        }
-    }
-
     if (metadata->TableSettings.StoreExternalBlobs) {
         auto& storageSettings = *proto.mutable_storage_settings();
         TString value = to_lower(metadata->TableSettings.StoreExternalBlobs.GetRef());

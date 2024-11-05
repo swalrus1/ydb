@@ -1,77 +1,80 @@
 #include "manager.h"
-#include "initializer.h"
-#include "checker.h"
+
+#include <ydb/core/tx/tiering/tier/behaviour.h>
+#include <ydb/core/tx/tiering/tier/checker.h>
+#include <ydb/core/tx/tiering/tier/object.h>
 
 namespace NKikimr::NColumnShard::NTiers {
 
-NMetadata::NModifications::TOperationParsingResult TTiersManager::DoBuildPatchFromSettings(
-    const NYql::TObjectSettingsImpl& settings,
-    TInternalModificationContext& context) const
-{
+void TTiersManager::DoBuildRequestFromSettings(
+    const NYql::TObjectSettingsImpl& settings, TInternalModificationContext& context, IBuildRequestController::TPtr controller) const {
     if (HasAppData() && !AppDataVerified().FeatureFlags.GetEnableTieringInColumnShard()) {
-        return TConclusionStatus::Fail("Tiering functionality is disabled for OLAP tables.");
+        controller->OnBuildProblem("Tiering functionality is disabled for OLAP tables.");
+        return;
     }
 
-    NMetadata::NInternal::TTableRecord result;
-    result.SetColumn(TTierConfig::TDecoder::TierName, NMetadata::NInternal::TYDBValue::Utf8(settings.GetObjectId()));
-    if (settings.GetObjectId().StartsWith("$") || settings.GetObjectId().StartsWith("_")) {
-        return TConclusionStatus::Fail("tier name cannot start with '$', '_' characters");
+    TString defaultUserId;
+    if (context.GetExternalData().GetUserToken()) {
+        defaultUserId = context.GetExternalData().GetUserToken()->GetUserSID();
     }
-    {
-        auto fConfig = settings.GetFeaturesExtractor().Extract(TTierConfig::TDecoder::TierConfig);
-        if (fConfig) {
-            NKikimrSchemeOp::TStorageTierConfig proto;
-            if (!::google::protobuf::TextFormat::ParseFromString(*fConfig, &proto)) {
-                return TConclusionStatus::Fail("incorrect proto format");
-            } else if (proto.HasObjectStorage()) {
-                TString defaultUserId;
-                if (context.GetExternalData().GetUserToken()) {
-                    defaultUserId = context.GetExternalData().GetUserToken()->GetUserSID();
-                }
 
-                if (proto.GetObjectStorage().HasSecretableAccessKey()) {
-                    auto accessKey = NMetadata::NSecret::TSecretIdOrValue::DeserializeFromProto(proto.GetObjectStorage().GetSecretableAccessKey(), defaultUserId);
-                    if (!accessKey) {
-                        return TConclusionStatus::Fail("AccessKey description is incorrect");
-                    }
-                    *proto.MutableObjectStorage()->MutableSecretableAccessKey() = accessKey->SerializeToProto();
-                } else if (proto.GetObjectStorage().HasAccessKey()) {
-                    auto accessKey = NMetadata::NSecret::TSecretIdOrValue::DeserializeFromString(proto.GetObjectStorage().GetAccessKey(), defaultUserId);
-                    if (!accessKey) {
-                        return TConclusionStatus::Fail("AccessKey is incorrect: " + proto.GetObjectStorage().GetAccessKey() + " for userId: " + defaultUserId);
-                    }
-                    *proto.MutableObjectStorage()->MutableAccessKey() = accessKey->SerializeToString();
-                } else {
-                    return TConclusionStatus::Fail("AccessKey not configured");
-                }
+    NKikimrSchemeOp::TTieredStorageProperties properties;
 
-                if (proto.GetObjectStorage().HasSecretableSecretKey()) {
-                    auto secretKey = NMetadata::NSecret::TSecretIdOrValue::DeserializeFromProto(proto.GetObjectStorage().GetSecretableSecretKey(), defaultUserId);
-                    if (!secretKey) {
-                        return TConclusionStatus::Fail("SecretKey description is incorrect");
-                    }
-                    *proto.MutableObjectStorage()->MutableSecretableSecretKey() = secretKey->SerializeToProto();
-                } else if (proto.GetObjectStorage().HasSecretKey()) {
-                    auto secretKey = NMetadata::NSecret::TSecretIdOrValue::DeserializeFromString(proto.GetObjectStorage().GetSecretKey(), defaultUserId);
-                    if (!secretKey) {
-                        return TConclusionStatus::Fail("SecretKey is incorrect");
-                    }
-                    *proto.MutableObjectStorage()->MutableSecretKey() = secretKey->SerializeToString();
-                } else {
-                    return TConclusionStatus::Fail("SecretKey not configured");
-                }
-            }
-            result.SetColumn(TTierConfig::TDecoder::TierConfig, NMetadata::NInternal::TYDBValue::Utf8(proto.DebugString()));
+    if (auto fValue = settings.GetFeaturesExtractor().Extract(KeyAccessKey)) {
+        auto key = NMetadata::NSecret::TSecretIdOrValue::DeserializeFromString(*fValue, defaultUserId);
+        if (!key) {
+            controller->OnBuildProblem("Access key is incorrect: " + *fValue + " for userId: " + defaultUserId);
+            return;
+        }
+        *properties.MutableObjectStorage()->MutableAccessKey() = key->SerializeToString();
+    }
+    if (auto fValue = settings.GetFeaturesExtractor().Extract(KeySecretKey)) {
+        auto key = NMetadata::NSecret::TSecretIdOrValue::DeserializeFromString(*fValue, defaultUserId);
+        if (!key) {
+            controller->OnBuildProblem("Secret key is incorrect: " + *fValue + " for userId: " + defaultUserId);
+            return;
+        }
+        *properties.MutableObjectStorage()->MutableSecretKey() = key->SerializeToString();
+    }
+    if (auto fValue = settings.GetFeaturesExtractor().Extract(KeyEndpoint)) {
+        if (fValue->Empty()) {
+            controller->OnBuildProblem("Empty endpoint");
+            return;
+        }
+        *properties.MutableObjectStorage()->MutableEndpoint() = *fValue;
+    }
+    if (auto fValue = settings.GetFeaturesExtractor().Extract(KeyBucket)) {
+        if (fValue->Empty()) {
+            controller->OnBuildProblem("Empty bucket");
+            return;
+        }
+        *properties.MutableObjectStorage()->MutableBucket() = *fValue;
+    }
+    if (auto fValue = settings.GetFeaturesExtractor().Extract(KeyCompressionCodec)) {
+        if (auto codec = ParseCodec(*fValue)) {
+            properties.MutableCompression()->SetCodec(*codec);
+        } else {
+            controller->OnBuildProblem("Unsupported compression codec: " + *fValue);
+            return;
         }
     }
-    return result;
+    if (auto fValue = settings.GetFeaturesExtractor().Extract(KeyCompressionLevel)) {
+        ui32 level;
+        if (!TryFromString(*fValue, level)) {
+            controller->OnBuildProblem("Cannot parse compression level: " + *fValue);
+            return;
+        }
+        properties.MutableCompression()->SetLevel(level);
+    }
+
+    if (!settings.GetFeaturesExtractor().IsFinished()) {
+        controller->OnBuildProblem("undefined params: " + settings.GetFeaturesExtractor().GetRemainedParamsString());
+        return;
+    }
+
+    auto* actorSystem = context.GetExternalData().GetActorSystem();
+    AFL_VERIFY(actorSystem);
+    actorSystem->Register(new TTierPreparationActor(std::move(properties), controller, context));
+}
 }
 
-void TTiersManager::DoPrepareObjectsBeforeModification(std::vector<TTierConfig>&& patchedObjects,
-    NMetadata::NModifications::IAlterPreparationController<TTierConfig>::TPtr controller,
-    const TInternalModificationContext& context, const NMetadata::NModifications::TAlterOperationContext& /*alterContext*/) const
-{
-    TActivationContext::Register(new TTierPreparationActor(std::move(patchedObjects), controller, context));
-}
-
-}
