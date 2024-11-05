@@ -1963,40 +1963,33 @@ namespace {
         return true;
     }
 
-    bool StoreStrictInterval(const TRule_strict_interval_expr& from, TNodePtr& to, TSqlExpression& expr, TContext& ctx) {
-        auto intervalArgExpr = expr.Build(from.GetRule_expr3());
-        if (!intervalArgExpr) {
+    bool StoreTierSettings(
+        const TRule_ttl_tier_entry& from, std::vector<TTtlSettings::TTierSettings>& to, TContext& ctx, TTranslation& txc) {
+        const TString intervalFunction = Id(from.GetRule_id_expr1(), txc);
+        if (intervalFunction != "Interval") {
+            ctx.Error() << "Literal of Interval type is expected for TTL";
             return false;
         }
-        auto intervalExpr = BuildBuiltinFunc(ctx, ctx.Pos(), "Interval", { intervalArgExpr });
+
+        const TString& evictionDelayString = ctx.Token(from.GetToken3());
+        const auto intervalArg = BuildLiteralSmartString(ctx, evictionDelayString);
+        auto intervalExpr = BuildBuiltinFunc(ctx, ctx.Pos(), "Interval", { intervalArg });
         if (!intervalExpr) {
             return false;
         }
-        to = intervalExpr;
-        return true;
-    }
 
-    bool StoreTierSettings(
-        const TRule_ttl_tier_entry& from, std::vector<TTtlSettings::TTierSettings>& to, TSqlExpression& expr, TContext& ctx, TTranslation& txc) {
-        TNodePtr evictionDelayExpr;
-        if (!StoreStrictInterval(from.GetRule_strict_interval_expr1(), evictionDelayExpr, expr, ctx)) {
-            return false;
-        }
         std::optional<TIdentifier> storageName;
-        if (from.HasBlock2()) {
-            storageName = IdEx(from.GetBlock2().GetRule_an_id2(), txc);
+        switch (from.GetBlock5().Alt_case()) {
+            case TRule_ttl_tier_entry_TBlock5::kAlt1:
+                storageName = IdEx(from.GetBlock5().GetAlt1().GetRule_an_id2(), txc);
+                break;
+            case TRule_ttl_tier_entry_TBlock5::kAlt2:
+                break;
+            case TRule_ttl_tier_entry_TBlock5::ALT_NOT_SET:
+                Y_ABORT("You should change implementation according to grammar changes");
         }
-        to.emplace_back(evictionDelayExpr, storageName);
-        return true;
-    }
 
-    bool StoreTierSettings(
-        const TRule_strict_interval_expr& from, std::vector<TTtlSettings::TTierSettings>& to, TSqlExpression& expr, TContext& ctx) {
-        TNodePtr evictionDelayExpr;
-        if (!StoreStrictInterval(from, evictionDelayExpr, expr, ctx)) {
-            return false;
-        }
-        to.emplace_back(evictionDelayExpr);
+        to.emplace_back(intervalExpr, storageName);
         return true;
     }
 
@@ -2009,17 +2002,25 @@ namespace {
 
             std::vector<TTtlSettings::TTierSettings> tiers;
             switch (tiersBlock.Alt_case()) {
-            case TRule_table_setting_value_TAlt5_TBlock1::kAlt1:
-                if (!StoreTierSettings(tiersBlock.GetAlt1().GetRule_strict_interval_expr1(), tiers, expr, ctx)) {
+            case TRule_table_setting_value_TAlt5_TBlock1::kAlt1: {
+                auto exprNode = expr.Build(tiersBlock.GetAlt1().GetRule_expr1());
+                if (!exprNode) {
                     return false;
                 }
-                break;
+
+                if (exprNode->GetOpName() != "Interval") {
+                    ctx.Error() << "Literal of Interval type is expected for TTL";
+                    return false;
+                }
+
+                tiers.emplace_back(exprNode);
+            } break;
             case TRule_table_setting_value_TAlt5_TBlock1::kAlt2:
-                if (!StoreTierSettings(tiersBlock.GetAlt2().GetRule_ttl_tier_list1().GetRule_ttl_tier_entry2(), tiers, expr, ctx, txc)) {
+                if (!StoreTierSettings(tiersBlock.GetAlt2().GetRule_ttl_tier_list1().GetRule_ttl_tier_entry2(), tiers, ctx, txc)) {
                     return false;
                 }
                 for (const auto& tierBlock : tiersBlock.GetAlt2().GetRule_ttl_tier_list1().GetBlock3()) {
-                    if (!StoreTierSettings(tierBlock.GetRule_ttl_tier_entry2(), tiers, expr, ctx, txc)) {
+                    if (!StoreTierSettings(tierBlock.GetRule_ttl_tier_entry2(), tiers, ctx, txc)) {
                         return false;
                     }
                 }

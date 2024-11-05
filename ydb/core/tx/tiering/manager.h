@@ -24,10 +24,9 @@ NArrow::NSerialization::TSerializerContainer ConvertCompression(const NKikimrSch
 class TManager {
 private:
     ui64 TabletId = 0;
-    YDB_READONLY_DEF(NActors::TActorId, TabletActorId);
-    YDB_READONLY_DEF(TString, TierName);
-    YDB_READONLY_DEF(TTierConfig, Config);
-    YDB_READONLY_DEF(NActors::TActorId, StorageActorId);
+    NActors::TActorId TabletActorId;
+    TString TierName;
+    NActors::TActorId StorageActorId;
     std::optional<NKikimrSchemeOp::TS3Settings> S3Settings;
 public:
     const NKikimrSchemeOp::TS3Settings& GetS3Settings() const {
@@ -35,46 +34,38 @@ public:
         return *S3Settings;
     }
 
-    TManager(const ui64 tabletId, const NActors::TActorId& tabletActorId, const TString& tierName, const TTierConfig& config);
+    TManager(const ui64 tabletId, const NActors::TActorId& tabletActorId, const TString& tierName);
 
+    bool IsReady() const {
+        return !!S3Settings;
+    }
     TManager& Restart(const TTierConfig& config, std::shared_ptr<NMetadata::NSecret::TSnapshot> secrets);
     bool Stop();
-    bool Start(std::shared_ptr<NMetadata::NSecret::TSnapshot> secrets);
+    bool Start(const TTierConfig& config, std::shared_ptr<NMetadata::NSecret::TSnapshot> secrets);
 };
 }
 
 class TTiersManager: public ITiersManager {
 private:
-    class TTierRef: public TMoveOnly {
+    friend class TTierRef;
+    class TTierRefGuard: public TMoveOnly {
     private:
         YDB_READONLY_DEF(TString, TierName);
-        THashMap<TString, ui64>* RefCounters;
+        TTiersManager* Owner;
 
     public:
-        TTierRef(const TString& tierName, THashMap<TString, ui64>& refCounters)
-            : TierName(tierName)
-            , RefCounters(&refCounters) {
-            ++(*RefCounters)[tierName];
-        }
+        TTierRefGuard(const TString& tierName, TTiersManager& owner);
+        ~TTierRefGuard();
 
-        TTierRef(TTierRef&& other)
+        TTierRefGuard(TTierRefGuard&& other)
             : TierName(other.TierName)
-            , RefCounters(other.RefCounters) {
-            other.RefCounters = nullptr;
+            , Owner(other.Owner) {
+            other.Owner = nullptr;
         }
-        TTierRef& operator=(TTierRef&& other) {
-            std::swap(RefCounters, other.RefCounters);
+        TTierRefGuard& operator=(TTierRefGuard&& other) {
+            std::swap(Owner, other.Owner);
             std::swap(TierName, other.TierName);
             return *this;
-        }
-
-        ~TTierRef() {
-            if (RefCounters) {
-                auto findTier = RefCounters->FindPtr(TierName);
-                AFL_VERIFY(findTier);
-                AFL_VERIFY(*findTier);
-                --*findTier;
-            }
         }
     };
 
@@ -90,16 +81,18 @@ private:
     TManagers Managers;
 
     using TTierRefCount = THashMap<TString, ui64>;
-    using TTierRefsByPathId = THashMap<ui64, std::vector<TTierRef>>;
+    using TTierRefsByPathId = THashMap<ui64, std::vector<TTierRefGuard>>;
     YDB_READONLY_DEF(TTierRefCount, TierRefCount);
     YDB_READONLY_DEF(TTierRefsByPathId, UsedTiers);
 
     using TTierByName = THashMap<TString, NTiers::TTierConfig>;
-    YDB_ACCESSOR_DEF(TTierByName, Tiers);
-    YDB_ACCESSOR_DEF(std::shared_ptr<NMetadata::NSecret::TSnapshot>, Secrets);
+    YDB_READONLY_DEF(TTierByName, TierConfigs);
+    YDB_READONLY_DEF(std::shared_ptr<NMetadata::NSecret::TSnapshot>, Secrets);
 
 private:
     void OnConfigsUpdated(bool notifyShard = true);
+    void RegisterTier(const TString& name);
+    void UnregisterTier(const TString& name);
 
 public:
     TTiersManager(const ui64 tabletId, const TActorId& tabletActorId, std::function<void(const TActorContext& ctx)> shardCallback = {})

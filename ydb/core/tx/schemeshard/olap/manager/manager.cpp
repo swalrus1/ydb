@@ -4,7 +4,7 @@ namespace NKikimr::NSchemeShard {
 
 void TTablesStorage::OnAddObject(const TPathId& pathId, TColumnTableInfo::TPtr object) {
     for (const auto& tier : object->Description.GetTtlSettings().GetEnabled().GetTiers()) {
-        AFL_VERIFY(PathsByTier[tier.GetStorageName()].emplace(pathId).second);
+        PathsByTier[tier.GetStorageName()].emplace(pathId);
     }
     for (auto&& s : object->GetColumnShards()) {
         TablesByShard[s].AddId(pathId);
