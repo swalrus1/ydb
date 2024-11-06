@@ -14,6 +14,9 @@ private:
     YDB_READONLY_PROTECT_DEF(TString, OwnerUserId);
     YDB_READONLY_PROTECT_DEF(TString, SecretId);
 public:
+    inline static const TString PrefixWithUser = "USId:";
+    inline static const TString PrefixNoUser = "SId:";
+
     TSecretId() = default;
     TSecretId(const TString& ownerUserId, const TString& secretId)
         : OwnerUserId(ownerUserId)
@@ -32,7 +35,7 @@ public:
         if (proto.HasValue()) {
             return proto.GetValue();
         } else {
-            return TStringBuilder() << "USId:" << (proto.GetSecretOwnerId() ? proto.GetSecretOwnerId() : defaultOwnerId) << ":" << SecretId;
+            return TStringBuilder() << PrefixWithUser << (proto.GetSecretOwnerId() ? proto.GetSecretOwnerId() : defaultOwnerId) << ":" << SecretId;
         }
     }
 
@@ -51,23 +54,21 @@ private:
     TSecretIdOrValue() = default;
 
     bool DeserializeFromStringImpl(const TString& info, const TString& defaultUserId) {
-        static const TString prefixWithUser = "USId:";
-        static const TString prefixNoUser = "SId:";
-        if (info.StartsWith(prefixWithUser)) {
+        if (info.StartsWith(TSecretId::PrefixWithUser)) {
             TStringBuf sb(info.data(), info.size());
-            sb.Skip(prefixWithUser.size());
+            sb.Skip(TSecretId::PrefixWithUser.size());
             TStringBuf uId;
             TStringBuf sId;
             if (!sb.TrySplit(':', uId, sId)) {
                 return false;
             }
-            if (!uId || !sId) {
+            if (!sId) {  // TODO revert
                 return false;
             }
             SecretId = TSecretId(uId, sId);
-        } else if (info.StartsWith(prefixNoUser)) {
+        } else if (info.StartsWith(TSecretId::PrefixNoUser)) {
             TStringBuf sb(info.data(), info.size());
-            sb.Skip(prefixNoUser.size());
+            sb.Skip(TSecretId::PrefixNoUser.size());
             SecretId = TSecretId(defaultUserId, TString(sb));
             if (!sb || !defaultUserId) {
                 return false;

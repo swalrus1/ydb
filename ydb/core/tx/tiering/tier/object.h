@@ -52,6 +52,8 @@ public:
         return true;
     }
 
+    bool DeserializeFromProto(const NKikimrSchemeOp::TExternalDataSourceDescription& proto);
+
     bool ApplyPatch(const TProto& proto) override {
         const auto& properties = GetProperties(proto);
         if (properties.HasCompression()) {

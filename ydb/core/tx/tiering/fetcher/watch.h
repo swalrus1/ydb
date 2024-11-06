@@ -90,7 +90,7 @@ private:
                 newTieredStorages.emplace_back(tieredStorageId);
             }
         }
-        RequestPaths(newTieredStorages, GetStorageDirectory<NTiers::TTierConfig>());
+        RequestPaths(newTieredStorages);
     }
 
     THolder<NSchemeCache::TSchemeCacheNavigate> BuildSchemeCacheNavigateRequest(
@@ -112,11 +112,10 @@ private:
         return request;
     }
 
-    void RequestPaths(const std::vector<TString>& tieredStorages, const TString& storagePath) {
+    void RequestPaths(const std::vector<TString>& tieredStorages) {
         TVector<TVector<TString>> paths;
         for (const TString& tieredStorageId : tieredStorages) {
-            paths.emplace_back(SplitPath(storagePath));
-            paths.back().emplace_back(tieredStorageId);
+            paths.emplace_back(SplitPath(tieredStorageId));
         }
 
         auto event =
@@ -127,7 +126,7 @@ private:
     void OnPathFetched(const TVector<TString> pathComponents, const TPathId& pathId, NSchemeCache::TSchemeCacheNavigate::EKind kind) {
         AFL_DEBUG(NKikimrServices::TX_TIERING)("component", "tiering_watcher")("event", "path_fetched")("path", JoinPath(pathComponents));
         switch (kind) {
-            case NSchemeCache::TSchemeCacheNavigate::KindTieredStorage:
+            case NSchemeCache::TSchemeCacheNavigate::KindExternalDataSource:
                 break;
             default:
                 OnObjectResolutionFailure(pathComponents, NTiers::TBaseEvObjectResolutionFailed::UNEXPECTED_KIND);
@@ -157,7 +156,7 @@ private:
         }
     }
 
-    void OnTieredStorageFetched(const TString& name, const NKikimrSchemeOp::TMetadataObjectProperties& properties) {
+    void OnTieredStorageFetched(const TString& name, const NKikimrSchemeOp::TExternalDataSourceDescription& properties) {
         NTiers::TTierConfig config;
         AFL_VERIFY(config.DeserializeFromProto(properties))("name", name)("proto", properties.DebugString());
         Send(Owner, new NTiers::TEvNotifyTieredStorageUpdated(name, config));
@@ -222,11 +221,11 @@ public:
         AFL_DEBUG(NKikimrServices::TX_TIERING)("component", "tiering_watcher")("event", "object_fetched")("path", ev->Get()->Path);
         const auto& describeResult = *ev->Get()->Result;
         const auto& pathDescription = describeResult.GetPathDescription();
-        const TString& name = pathDescription.GetTieredStorageDescription().GetName();
+        const TString& name = describeResult.GetPath();
 
         switch (pathDescription.GetSelf().GetPathType()) {
-            case NKikimrSchemeOp::EPathTypeTieredStorage:
-                OnTieredStorageFetched(name, pathDescription.GetTieredStorageDescription().GetProperties());
+            case NKikimrSchemeOp::EPathTypeExternalDataSource:
+                OnTieredStorageFetched(name, pathDescription.GetExternalDataSourceDescription());
                 break;
             default:
                 AFL_VERIFY(false)("issue", "invalid_object_kind")("kind", pathDescription.GetSelf().GetPathType());
