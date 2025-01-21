@@ -11,8 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 class TestDataCorrectness(TllTieringTestBase):
-    ''' Implements https://github.com/ydb-platform/ydb/issues/13465'''
-
     test_name = "data_correctness"
     row_count = 10 ** 7
     single_upsert_row_count = 10 ** 6
@@ -75,6 +73,7 @@ class TestDataCorrectness(TllTieringTestBase):
             time.sleep(10)
 
     def test(self):
+        ''' Implements https://github.com/ydb-platform/ydb/issues/13465'''
         test_dir = f"{self.ydb_client.database}/{self.test_name}"
         table_path = f"{test_dir}/table"
         secret_prefix = self.test_name
