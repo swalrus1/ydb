@@ -153,6 +153,7 @@ class TestDataCorrectness(TllTieringTestBase):
         assert sum(info["Rows"] for info in table.get_portion_stat_by_tier(True).values())
 
         assert self.total_values(table_path) == rows
+        # FIXME: https://github.com/ydb-platform/ydb/issues/13562
         self.wait_eviction(table)
         assert self.total_values(table_path) == rows
         assert table.get_portion_stat_by_tier(True)[eds_path]["Rows"] == rows, dict(table.get_portion_stat_by_tier(True))
