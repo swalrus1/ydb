@@ -104,12 +104,6 @@ class TestDataCorrectness(TllTieringTestBase):
 
         logger.info(f"Table {table_path} created")
 
-        # # Set compaction planner class, will be redundant after https://github.com/ydb-platform/ydb/issues/13562
-        # self.ydb_client.query(f"""
-        #     ALTER OBJECT `{table_path}` (TYPE TABLE) SET (ACTION=UPSERT_OPTIONS, `COMPACTION_PLANNER.CLASS_NAME`=`lc-buckets`, `COMPACTION_PLANNER.FEATURES`=`
-        #         {{"levels" : [{{"class_name" : "Zero", "portions_live_duration" : "0s"}}]}}`);
-        #     """)
-
         self.ydb_client.query(f"CREATE OBJECT {access_key_id_secret_name} (TYPE SECRET) WITH value='{self.s3_client.key_id}'")
         self.ydb_client.query(f"CREATE OBJECT {access_key_secret_secret_name} (TYPE SECRET) WITH value='{self.s3_client.key_secret}'")
 
