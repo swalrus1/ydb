@@ -67,7 +67,10 @@ class TestDataCorrectness(TllTieringTestBase):
         return self.ydb_client.query(f"select sum(val) as Values from `{table}`")[0].rows[0]["Values"] or 0
     
     def wait_eviction(self, table: ColumnTableHelper):
+        deadline = datetime.datetime.now() + datetime.timedelta(seconds=60)
         while table.get_portion_stat_by_tier(True).get("__DEFAULT", {}).get("Rows", 0):
+            assert datetime.datetime.now() < deadline, "Timeout for wait eviction is exceeded"
+
             logger.info("Waiting for data eviction")
             time.sleep(10)
 
