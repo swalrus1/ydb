@@ -134,6 +134,7 @@ class TllTieringTestBase(object):
                 "TX_COLUMNSHARD_BLOBS_TIER": LogLevels.DEBUG,
             },
         )
+        config.yaml_config["table_service_config"]["allow_olap_data_query"] = True
         cls.cluster = KiKiMR(config)
         cls.cluster.start()
         node = cls.cluster.nodes[1]
