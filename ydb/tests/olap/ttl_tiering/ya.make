@@ -9,6 +9,7 @@ TEST_SRCS(
     ttl_delete_s3.py
     ttl_unavailable_s3.py
     data_migration_when_alter_ttl.py
+    unstable_connection.py
 )
 
 SIZE(MEDIUM)
