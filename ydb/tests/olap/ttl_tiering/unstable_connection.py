@@ -45,7 +45,7 @@ class TestUnstableConnection(TllTieringTestBase):
             timestamp_from_ms += current_chunk_size
             rows -= current_chunk_size
             assert rows >= 0
-    
+
     def writer(self, table: str, stop_event):
         logger.info("Writer started")
         while not stop_event.is_set():
@@ -55,7 +55,7 @@ class TestUnstableConnection(TllTieringTestBase):
     def reader(self, table: str, stop_event):
         logger.info("Reader started")
         while not stop_event.is_set():
-            self.ydb_client.query(f"SELECT ts FROM {table} WHERE StartsWith(s, \"a\")")
+            self.ydb_client.query(f"SELECT ts FROM `{table}` WHERE StartsWith(s, \"a\")")
         logger.info("Reader stopped")
 
     def adversary(self, pid: int, stop_event):
