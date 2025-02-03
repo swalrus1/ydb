@@ -86,8 +86,8 @@ class ColumnTableHelper:
     def get_portion_count(self) -> int:
         return self.ydb_client.query(f"select count(*) as Rows from `{self.path}/.sys/primary_index_portion_stats`")[0].rows[0]["Rows"]
 
-    def get_portion_stat_by_tier(self, only_active: bool = False) -> dict[str, dict[str, int]]:
-        results = self.ydb_client.query(f"select TierName, sum(Rows) as Rows, count(*) as Portions from `{self.path}/.sys/primary_index_portion_stats`{' where Activity == 1' if only_active else ''} group by TierName")
+    def get_portion_stat_by_tier(self) -> dict[str, dict[str, int]]:
+        results = self.ydb_client.query(f"select TierName, sum(Rows) as Rows, count(*) as Portions from `{self.path}/.sys/primary_index_portion_stats` group by TierName")
         return {row["TierName"]: {"Rows": row["Rows"], "Portions": row["Portions"]} for result_set in results for row in result_set.rows}
 
     def get_blob_stat_by_tier(self) -> dict[str, (int, int)]:
@@ -98,6 +98,15 @@ class ColumnTableHelper:
         """
         results = self.ydb_client.query(stmt)
         return {row["TierName"]: {"Portions": row["Portions"], "BlobSize": row["BlobSize"], "BlobCount": row["BlobCount"]} for result_set in results for row in result_set.rows}
+    
+    def set_fast_compaction(self):
+        self.ydb_client.query(
+            f"""
+            ALTER OBJECT `{self.path}` (TYPE TABLE) SET (ACTION=UPSERT_OPTIONS, `COMPACTION_PLANNER.CLASS_NAME`=`lc-buckets`, `COMPACTION_PLANNER.FEATURES`=`
+                  {{"levels" : [{{"class_name" : "Zero", "portions_live_duration" : "5s", "expected_blobs_size" : 1000000000000, "portions_count_available" : 2}}, 
+                                {{"class_name" : "Zero"}}]}}`);
+            """
+        )
 
 
 class TllTieringTestBase(object):
@@ -127,6 +136,7 @@ class TllTieringTestBase(object):
                 "optimizer_freshness_check_duration_ms": 0,
                 "small_portion_detect_size_limit": 0,
                 "max_read_staleness_ms": 5000,
+                "alter_object_enabled": True,
             },
             additional_log_configs={
                 "TX_COLUMNSHARD_TIERING": LogLevels.DEBUG,

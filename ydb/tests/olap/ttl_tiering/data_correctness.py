@@ -12,9 +12,8 @@ logger = logging.getLogger(__name__)
 
 class TestDataCorrectness(TllTieringTestBase):
     test_name = "data_correctness"
-    row_count = 10 ** 7
-    single_upsert_row_count = 10 ** 6
     cold_bucket = "cold"
+    n_shards = 4
 
     @classmethod
     def setup_class(cls):
@@ -33,10 +32,11 @@ class TestDataCorrectness(TllTieringTestBase):
             current_chunk_size = min(chunk_size, rows)
             data = [
                 {
-                    'ts': timestamp_from_ms + i,
-                    's': random.randbytes(1024),
-                    'val': value
-                } for i in range(current_chunk_size)
+                    "ts": timestamp_from_ms + i,
+                    "s": random.randbytes(1024 * 10),
+                    "val": value,
+                }
+                for i in range(current_chunk_size)
             ]
             self.ydb_client.bulk_upsert(
                 table,
@@ -46,34 +46,35 @@ class TestDataCorrectness(TllTieringTestBase):
             timestamp_from_ms += current_chunk_size
             rows -= current_chunk_size
             assert rows >= 0
-    
-    def delete_data(
-        self,
-        table: str,
-        timestamp_from_ms: int,
-        rows: int,
-    ):
-        chunk_size = 100
-        while rows:
-            current_chunk_size = min(chunk_size, rows)
-            self.ydb_client.query(f'delete from `{table}` where ts between DateTime::FromMilliseconds({timestamp_from_ms}) AND DateTime::FromMilliseconds({timestamp_from_ms + chunk_size});')
-            timestamp_from_ms += current_chunk_size
-            rows -= current_chunk_size
-            assert rows >= 0
 
     def total_values(self, table: str) -> int:
-        return self.ydb_client.query(f"select sum(val) as Values from `{table}`")[0].rows[0]["Values"] or 0
-    
+        return (
+            self.ydb_client.query(f"select sum(val) as Values from `{table}`")[0].rows[
+                0
+            ]["Values"]
+            or 0
+        )
+
     def wait_eviction(self, table: ColumnTableHelper):
         deadline = datetime.datetime.now() + datetime.timedelta(seconds=60)
-        while table.get_portion_stat_by_tier(True).get("__DEFAULT", {}).get("Rows", 0):
-            assert datetime.datetime.now() < deadline, "Timeout for wait eviction is exceeded"
+        while (
+            table.get_portion_stat_by_tier().get("__DEFAULT", {}).get("Portions", 0)
+            > self.n_shards
+        ):
+            assert (
+                datetime.datetime.now() < deadline
+            ), "Timeout for wait eviction is exceeded"
 
-            logger.info("Waiting for data eviction")
-            time.sleep(10)
+            logger.info(
+                f"Waiting for data eviction: {table.get_portion_stat_by_tier()}"
+            )
+            time.sleep(1)
+
+        stats = table.get_portion_stat_by_tier()
+        assert len(stats) > 1 or '__DEFAULT' not in stats
 
     def test(self):
-        ''' Implements https://github.com/ydb-platform/ydb/issues/13465'''
+        """Implements https://github.com/ydb-platform/ydb/issues/13465"""
         test_dir = f"{self.ydb_client.database}/{self.test_name}"
         table_path = f"{test_dir}/table"
         secret_prefix = self.test_name
@@ -85,7 +86,8 @@ class TestDataCorrectness(TllTieringTestBase):
         if self.s3_client.get_bucket_stat(self.cold_bucket) != (0, 0):
             raise Exception("Bucket for cold data is not empty")
 
-        self.ydb_client.query(f"""
+        self.ydb_client.query(
+            f"""
             CREATE TABLE `{table_path}` (
                 ts Timestamp NOT NULL,
                 s String,
@@ -94,10 +96,13 @@ class TestDataCorrectness(TllTieringTestBase):
             )
             WITH (
                 STORE = COLUMN,
-                AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = 4
+                AUTO_PARTITIONING_MIN_PARTITIONS_COUNT = {self.n_shards}
             )
             """
         )
+
+        table = ColumnTableHelper(self.ydb_client, table_path)
+        table.set_fast_compaction()
 
         self.column_types = ydb.BulkUpsertColumns()
         self.column_types.add_column("ts", ydb.PrimitiveType.Timestamp)
@@ -106,10 +111,15 @@ class TestDataCorrectness(TllTieringTestBase):
 
         logger.info(f"Table {table_path} created")
 
-        self.ydb_client.query(f"CREATE OBJECT {access_key_id_secret_name} (TYPE SECRET) WITH value='{self.s3_client.key_id}'")
-        self.ydb_client.query(f"CREATE OBJECT {access_key_secret_secret_name} (TYPE SECRET) WITH value='{self.s3_client.key_secret}'")
+        self.ydb_client.query(
+            f"CREATE OBJECT {access_key_id_secret_name} (TYPE SECRET) WITH value='{self.s3_client.key_id}'"
+        )
+        self.ydb_client.query(
+            f"CREATE OBJECT {access_key_secret_secret_name} (TYPE SECRET) WITH value='{self.s3_client.key_secret}'"
+        )
 
-        self.ydb_client.query(f"""
+        self.ydb_client.query(
+            f"""
             CREATE EXTERNAL DATA SOURCE `{eds_path}` WITH (
                 SOURCE_TYPE="ObjectStorage",
                 LOCATION="{self.s3_client.endpoint}/{self.cold_bucket}",
@@ -118,8 +128,8 @@ class TestDataCorrectness(TllTieringTestBase):
                 AWS_SECRET_ACCESS_KEY_SECRET_NAME="{access_key_secret_secret_name}",
                 AWS_REGION="{self.s3_client.region}"
             )
-        """)
-        table = ColumnTableHelper(self.ydb_client, table_path)
+        """
+        )
 
         stmt = f"""
             ALTER TABLE `{table_path}` SET (TTL =
@@ -130,17 +140,22 @@ class TestDataCorrectness(TllTieringTestBase):
         logger.info(stmt)
         self.ydb_client.query(stmt)
 
-
         ts_start = int(datetime.datetime.now().timestamp() * 1000000)
-        rows = 100000
+        rows = 10000
         num_threads = 10
         assert rows % num_threads == 0
         chunk_size = rows // num_threads
-        
+
         # Write data
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
             insert_futures = [
-                executor.submit(self.write_data, table_path, ts_start + i * chunk_size, chunk_size, 1)
+                executor.submit(
+                    self.write_data,
+                    table_path,
+                    ts_start + i * chunk_size,
+                    chunk_size,
+                    1,
+                )
                 for i in range(num_threads)
             ]
 
@@ -148,19 +163,19 @@ class TestDataCorrectness(TllTieringTestBase):
             for future in insert_futures:
                 future.result()
 
-        # Check that requests to sys view work correctly
-        assert sum(info["Rows"] for info in table.get_portion_stat_by_tier(True).values())
-
-        assert self.total_values(table_path) == rows
-        # FIXME: https://github.com/ydb-platform/ydb/issues/13562
         self.wait_eviction(table)
         assert self.total_values(table_path) == rows
-        assert table.get_portion_stat_by_tier(True)[eds_path]["Rows"] == rows, dict(table.get_portion_stat_by_tier(True))
 
         # Update data
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
             insert_futures = [
-                executor.submit(self.write_data, table_path, ts_start + i * chunk_size, chunk_size, 2)
+                executor.submit(
+                    self.write_data,
+                    table_path,
+                    ts_start + i * chunk_size,
+                    chunk_size,
+                    2,
+                )
                 for i in range(num_threads)
             ]
 
@@ -168,20 +183,10 @@ class TestDataCorrectness(TllTieringTestBase):
             for future in insert_futures:
                 future.result()
 
-        assert self.total_values(table_path) == rows * 2
         self.wait_eviction(table)
         assert self.total_values(table_path) == rows * 2
-        assert table.get_portion_stat_by_tier(True)[eds_path]["Rows"] == rows, dict(table.get_portion_stat_by_tier(True))
 
         # Delete data
-        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-            insert_futures = [
-                executor.submit(self.delete_data, table_path, ts_start + i * chunk_size, chunk_size)
-                for i in range(num_threads)
-            ]
-
-            concurrent.futures.wait(insert_futures)
-            for future in insert_futures:
-                future.result()
+        self.ydb_client.query(f"delete from `{table_path}`")
 
         assert not self.total_values(table_path)

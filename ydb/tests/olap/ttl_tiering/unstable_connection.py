@@ -100,6 +100,9 @@ class TestUnstableConnection(TllTieringTestBase):
             """
         )
 
+        table = ColumnTableHelper(self.ydb_client, table_path)
+        table.set_fast_compaction()
+
         self.column_types = ydb.BulkUpsertColumns()
         self.column_types.add_column("ts", ydb.PrimitiveType.Timestamp)
         self.column_types.add_column("s", ydb.PrimitiveType.String)
@@ -119,7 +122,6 @@ class TestUnstableConnection(TllTieringTestBase):
                 AWS_REGION="{self.s3_client.region}"
             )
         """)
-        table = ColumnTableHelper(self.ydb_client, table_path)
 
         stmt = f"""
             ALTER TABLE `{table_path}` SET (TTL =
@@ -147,6 +149,6 @@ class TestUnstableConnection(TllTieringTestBase):
 
             time.sleep(60)
             logger.info("Checking eviction")
-            assert table.get_portion_stat_by_tier(True).get(eds_path, {}).get("Rows", 0), f"Nothing is evicted after 1 minute: {table.get_portion_stat_by_tier(True)}"
+            assert table.get_portion_stat_by_tier().get(eds_path, {}).get("Rows", 0), f"Nothing is evicted after 1 minute: {table.get_portion_stat_by_tier()}"
 
             concurrent.futures.wait(workers)
